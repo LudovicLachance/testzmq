@@ -1,10 +1,11 @@
 #pragma once
+#include <ludo/BitsField.hpp>
 #include <string>
 #include <zmq.hpp>
 
 namespace ludo {
+
 class Zmq {
-  static int io_threads;
   static zmq::context_t context;
 
   zmq::socket_t socket;
@@ -12,6 +13,32 @@ class Zmq {
  public:
   Zmq() {}
   ~Zmq() {}
+
+  static int io_threads;
+
+  enum class code_t : u_int64_t {
+    empty = 0,
+    die = 1,
+    ok = 2,
+    please = 4,
+  };
+
+  union convert_code_t {
+    char toChar[8];
+    code_t toCode;
+  };
+
+  static std::string code_t_s(code_t code) {
+    convert_code_t converter;
+    converter.toCode = code;
+    return std::string{converter.toChar, 8};
+  }
+
+  static code_t s_code_t(std::string str) {
+    convert_code_t converter;
+    strncpy(converter.toChar, str.data(), 8);
+    return converter.toCode;
+  }
 
   void bind(const std::string& url) {
     this->socket = zmq::socket_t{this->context, ZMQ_REP};
@@ -34,27 +61,36 @@ class Zmq {
     this->socket.bind(url);
   }
 
+  code_t code = code_t::empty;
+
   std::string read(zmq::recv_flags waiting = zmq::recv_flags::none) {
     zmq::message_t request;
     zmq::detail::recv_result_t recv_result =
         this->socket.recv(request, waiting);
 
-    return std::string{static_cast<char*>(request.data()), recv_result.value()};
+    std::string msg =
+        std::string{static_cast<char*>(request.data()), recv_result.value()};
+    this->code =
+        s_code_t(std::string{std::begin(msg), std::next(std::begin(msg), 8)});
+
+    return std::string{std::next(std::begin(msg), 8), std::end(msg)};
   }
 
-  void write(const std::string& text) {
-    this->socket.send(zmq::message_t(text.c_str(), text.size()),
+  void write(const std::string& text, code_t code = code_t::ok) {
+    std::string str{code_t_s(code)};
+    str += text;
+    this->socket.send(zmq::message_t(std::begin(str), std::end(str)),
                       zmq::send_flags::none);
   }
 
-  std::string writeread(const std::string& text) {
-    this->write(text);
+  std::string writeread(const std::string& text, code_t code = code_t::ok) {
+    this->write(text, code);
     return this->read();
   }
 
-  std::string readwrite(const std::string& text) {
+  std::string readwrite(const std::string& text, code_t code = code_t::ok) {
     auto result = this->read();
-    this->write(text);
+    this->write(text, code);
     return result;
   }
 };

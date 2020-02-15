@@ -1,6 +1,8 @@
 !/usr/bin/env bash
 
-meson build --reconfigure \
+rm -rf build \
+ ;
+meson build \
  ;
 ninja -C build \
  ;

@@ -1,14 +1,17 @@
 #pragma once
+#include <ludo/BitsField.hpp>
 #include <ludo/Zmq.hpp>
 #include <thread>
 #include <vector>
 
 namespace ludo {
 class Parallel {
+  using code_t = ludo::Zmq::code_t;
+  using bcode_t = ludo::BitsField::Runtime<code_t>;
   std::string workBind{"inproc://work"};
   std::string resultBind{"inproc://result"};
 
-  void masterThread(std::vector<std::string> works = {},
+  void masterThread(const std::vector<std::string>& works = {},
                     u_int64_t numberThreads = 1) {
     std::thread result = std::thread{&Parallel::resultThread, this};
     ludo::Zmq giveWork;
@@ -20,22 +23,22 @@ class Parallel {
       workers.emplace_back(std::thread{&Parallel::workThread, this});
     }
 
-    for (auto &work : works) {
+    for (auto& work : works) {
       std::string request = giveWork.read();
-      if (request == "please") {
+      if (bcode_t::isset(giveWork.code, code_t::please)) {
         giveWork.write(work);
       }
     }
 
     for (size_t i = 0; i < workers.size(); ++i) {
-      giveWork.readwrite("die");
+      giveWork.readwrite("", code_t::die);
     }
 
     ludo::Zmq killResult;
     killResult.connect(this->resultBind);
-    killResult.writeread("die");
+    killResult.writeread("", code_t::die);
 
-    for (auto &worker : workers) {
+    for (auto& worker : workers) {
       worker.join();
     }
     result.join();
@@ -48,12 +51,12 @@ class Parallel {
     bool shouldDie = false;
 
     do {
-      std::string work = asker.writeread("please");
-      shouldDie = work != "die";
-      if (shouldDie) {
+      std::string work = asker.writeread("", code_t::please);
+      shouldDie = bcode_t::isset(asker.code, code_t::die);
+      if (!shouldDie) {
         resulter.writeread(work + " done!!!");
       }
-    } while (shouldDie);
+    } while (!shouldDie);
   }
 
   void resultThread() {
@@ -62,12 +65,12 @@ class Parallel {
     bool shouldDie = false;
 
     do {
-      std::string result = receiveResult.readwrite("ok");
-      shouldDie = result != "die";
-      if (shouldDie) {
+      std::string result = receiveResult.readwrite("", code_t::ok);
+      shouldDie = bcode_t::isset(receiveResult.code, code_t::die);
+      if (!shouldDie) {
         this->results.push_back(result);
       }
-    } while (shouldDie);
+    } while (!shouldDie);
   }
 
   std::vector<std::string> results;
@@ -76,12 +79,13 @@ class Parallel {
   Parallel() = default;
   ~Parallel() = default;
 
-  std::vector<std::string> run(std::vector<std::string> works = {},
+  std::vector<std::string> run(const std::vector<std::string>& works = {},
                                u_int64_t numberThreads = 1) {
+    // ludo::Zmq::io_threads = numberThreads / 2 + 1;
     this->results.reserve(works.size());
     this->masterThread(works, numberThreads);
-    auto tmp = this->results;
-    this->results = {};
+    std::vector<std::string> tmp;
+    this->results.swap(tmp);
     return tmp;
   }
 };

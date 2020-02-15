@@ -5,7 +5,7 @@ project(
   default_options : [
     'warning_level=3',
     'cpp_std=c++2a',
-    'optimization=3',
+    'optimization=g',
   ])
 
 thread_dep = dependency('threads')

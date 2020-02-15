@@ -7,7 +7,7 @@
 void test(int n) {
   ludo::Parallel workers;
   std::vector<std::string> works;
-  int number = 10000;
+  int number = 100000;
   works.resize(number, "work");
   auto start = std::chrono::high_resolution_clock::now();
 
@@ -23,9 +23,14 @@ void test(int n) {
 }
 
 int main() {
-  for (size_t i = 0; i < 1; ++i) {
-    test(std::pow(2, i+2));
-  }
+  test(std::pow(2, 2));
+  // ludo::Zmq::code_t thecode = ludo::Zmq::code_t::empty;
+  using bcode_t = ludo::BitsField::Runtime<ludo::Zmq::code_t>;
+  // thecode = bcode_t::set(thecode, ludo::Zmq::code_t::ok);
+  // std::cout << bcode_t::isset(thecode, ludo::Zmq::code_t::ok) << '\n';
+  ludo::Zmq::code_t code = ludo::Zmq::code_t::die;
+  std::string str = ludo::Zmq::code_t_s(code);
+  std::cout << bcode_t::isset(ludo::Zmq::s_code_t(str), ludo::Zmq::code_t::please) << '\n';
 
   return 0;
 }
