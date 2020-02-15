@@ -23,8 +23,8 @@ void test(int n) {
 }
 
 int main() {
-  for (size_t i = 0; i < 7; ++i) {
-    test(std::pow(2, i));
+  for (size_t i = 0; i < 1; ++i) {
+    test(std::pow(2, i+2));
   }
 
   return 0;

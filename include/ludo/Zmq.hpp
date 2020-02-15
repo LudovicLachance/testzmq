@@ -45,6 +45,17 @@ class Zmq {
     this->socket.send(zmq::message_t(text.c_str(), text.size()),
                       zmq::send_flags::none);
   }
+
+  std::string writeread(std::string text) {
+    this->write(text);
+    return this->read();
+  }
+
+  std::string readwrite(std::string text) {
+    auto result = this->read();
+    this->write(text);
+    return result;
+  }
 };
 }  // namespace ludo
 

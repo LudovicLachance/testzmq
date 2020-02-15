@@ -17,61 +17,55 @@ class Parallel {
     for (size_t i = 0; i < numberThreads; ++i) {
       workers.emplace_back(std::thread{&Parallel::workThread, this});
     }
-    // std::cout << "All started" << '\n';
-    while (works.size() > 0) {
+
+    for (auto &work : works) {
       std::string request = giveWork.read();
       if (request == "please") {
-        // std::cout << "read please" << '\n';
-
-        giveWork.write(works.front());
-        works.pop_front();
+        giveWork.write(work);
       }
     }
+
     for (size_t i = 0; i < workers.size(); ++i) {
-      giveWork.read();
-      giveWork.write("die");
+      giveWork.readwrite("die");
     }
-    // std::cout << "killed worker" << '\n';
 
     ludo::Zmq killResult;
     killResult.connect("inproc://result");
-    killResult.write("die");
-    killResult.read();
-    // std::cout << "killed result" << '\n';
+    killResult.writeread("die");
+
     for (auto &worker : workers) {
       worker.join();
     }
-    // std::cout << "join worker" << '\n';
     result.join();
-    // std::cout << "join result" << '\n';
   }
+
   void workThread() {
-    ludo::Zmq asker;
+    ludo::Zmq asker, resulter;
     asker.connect("inproc://work");
-    ludo::Zmq resulter;
     resulter.connect("inproc://result");
-    std::string work;
+    bool shouldDie = false;
+
     do {
-      asker.write("please");
-      work = asker.read();
-      if (work != "die") {
-        resulter.write(work + " done!!!");
-        resulter.read();
+      std::string work = asker.writeread("please");
+      shouldDie = work != "die";
+      if (shouldDie) {
+        resulter.writeread(work + " done!!!");
       }
-    } while (work != "die");
-    // std::cout << "worker die" << '\n';
+    } while (shouldDie);
   }
+
   void resultThread() {
     ludo::Zmq receiveResult;
     receiveResult.bind("inproc://result");
-    std::string result;
+    bool shouldDie = false;
+
     do {
-      result = receiveResult.read();
-      receiveResult.write("ok");
-      if (result != "die") {
+      std::string result = receiveResult.readwrite("ok");
+      shouldDie = result != "die";
+      if (shouldDie) {
         this->results.push_back(result);
       }
-    } while (result != "die");
+    } while (shouldDie);
   }
 
   std::vector<std::string> results;
