@@ -1,19 +1,21 @@
 #pragma once
-#include <deque>
-#include <iostream>
 #include <ludo/Zmq.hpp>
 #include <thread>
 #include <vector>
 
 namespace ludo {
 class Parallel {
-  void masterThread(std::deque<std::string> works = {},
+  std::string workBind{"inproc://work"};
+  std::string resultBind{"inproc://result"};
+
+  void masterThread(std::vector<std::string> works = {},
                     u_int64_t numberThreads = 1) {
     std::thread result = std::thread{&Parallel::resultThread, this};
     ludo::Zmq giveWork;
-    giveWork.bind("inproc://work");
+    giveWork.bind(this->workBind);
 
     std::vector<std::thread> workers;
+    workers.reserve(numberThreads);
     for (size_t i = 0; i < numberThreads; ++i) {
       workers.emplace_back(std::thread{&Parallel::workThread, this});
     }
@@ -30,7 +32,7 @@ class Parallel {
     }
 
     ludo::Zmq killResult;
-    killResult.connect("inproc://result");
+    killResult.connect(this->resultBind);
     killResult.writeread("die");
 
     for (auto &worker : workers) {
@@ -41,8 +43,8 @@ class Parallel {
 
   void workThread() {
     ludo::Zmq asker, resulter;
-    asker.connect("inproc://work");
-    resulter.connect("inproc://result");
+    asker.connect(this->workBind);
+    resulter.connect(this->resultBind);
     bool shouldDie = false;
 
     do {
@@ -56,7 +58,7 @@ class Parallel {
 
   void resultThread() {
     ludo::Zmq receiveResult;
-    receiveResult.bind("inproc://result");
+    receiveResult.bind(this->resultBind);
     bool shouldDie = false;
 
     do {
@@ -74,9 +76,9 @@ class Parallel {
   Parallel() = default;
   ~Parallel() = default;
 
-  std::vector<std::string> run(std::deque<std::string> works = {},
+  std::vector<std::string> run(std::vector<std::string> works = {},
                                u_int64_t numberThreads = 1) {
-    this->results.resize(works.size());
+    this->results.reserve(works.size());
     this->masterThread(works, numberThreads);
     auto tmp = this->results;
     this->results = {};

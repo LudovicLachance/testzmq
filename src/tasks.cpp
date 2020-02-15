@@ -6,8 +6,8 @@
 
 void test(int n) {
   ludo::Parallel workers;
-  std::deque<std::string> works;
-  int number = 1000000;
+  std::vector<std::string> works;
+  int number = 10000;
   works.resize(number, "work");
   auto start = std::chrono::high_resolution_clock::now();
 
