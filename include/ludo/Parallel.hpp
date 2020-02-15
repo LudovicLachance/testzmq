@@ -1,7 +1,9 @@
 #pragma once
+#include <functional>
 #include <ludo/BitsField.hpp>
 #include <ludo/Zmq.hpp>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace ludo {
@@ -10,6 +12,7 @@ class Parallel {
   using bcode_t = ludo::BitsField::Runtime<code_t>;
   std::string workBind{"inproc://work"};
   std::string resultBind{"inproc://result"};
+  unordered_map<u_int64_t, function<std::string(std::string)>> callbacks;
 
   void masterThread(const std::vector<std::string>& works = {},
                     u_int64_t numberThreads = 1) {
@@ -26,7 +29,7 @@ class Parallel {
     for (auto& work : works) {
       std::string request = giveWork.read();
       if (bcode_t::isset(giveWork.code, code_t::please)) {
-        giveWork.write(work);
+        giveWork.write(work, code_t::ok, 0ull);
       }
     }
 
@@ -45,6 +48,7 @@ class Parallel {
   }
 
   void workThread() {
+    auto workICanDo = this->callbacks;
     ludo::Zmq asker, resulter;
     asker.connect(this->workBind);
     resulter.connect(this->resultBind);
@@ -54,7 +58,7 @@ class Parallel {
       std::string work = asker.writeread("", code_t::please);
       shouldDie = bcode_t::isset(asker.code, code_t::die);
       if (!shouldDie) {
-        resulter.writeread(work + " done!!!");
+        resulter.writeread(workICanDo[asker.extra](work));
       }
     } while (!shouldDie);
   }
@@ -78,6 +82,11 @@ class Parallel {
  public:
   Parallel() = default;
   ~Parallel() = default;
+
+  void setCallbacks(
+      unordered_map<u_int64_t, function<std::string(std::string)>> callbacks) {
+    this->callbacks = callbacks;
+  }
 
   std::vector<std::string> run(const std::vector<std::string>& works = {},
                                u_int64_t numberThreads = 1) {

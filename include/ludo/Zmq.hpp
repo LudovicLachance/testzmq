@@ -1,4 +1,5 @@
 #pragma once
+#include <ludo/BitsConverter.hpp>
 #include <ludo/BitsField.hpp>
 #include <string>
 #include <zmq.hpp>
@@ -23,23 +24,6 @@ class Zmq {
     please = 4,
   };
 
-  union convert_code_t {
-    char toChar[8];
-    code_t toCode;
-  };
-
-  static std::string code_t_s(code_t code) {
-    convert_code_t converter;
-    converter.toCode = code;
-    return std::string{converter.toChar, 8};
-  }
-
-  static code_t s_code_t(std::string str) {
-    convert_code_t converter;
-    strncpy(converter.toChar, str.data(), 8);
-    return converter.toCode;
-  }
-
   void bind(const std::string& url) {
     this->socket = zmq::socket_t{this->context, ZMQ_REP};
     this->socket.bind(url);
@@ -62,6 +46,7 @@ class Zmq {
   }
 
   code_t code = code_t::empty;
+  u_int64_t extra = 0ull;
 
   std::string read(zmq::recv_flags waiting = zmq::recv_flags::none) {
     zmq::message_t request;
@@ -70,27 +55,34 @@ class Zmq {
 
     std::string msg =
         std::string{static_cast<char*>(request.data()), recv_result.value()};
-    this->code =
-        s_code_t(std::string{std::begin(msg), std::next(std::begin(msg), 8)});
+    this->code = ludo::BitsConverter<code_t>::fromString(
+        std::string{std::begin(msg), std::next(std::begin(msg), 8)});
+    this->extra = ludo::BitsConverter<u_int64_t>::fromString(std::string{
+        std::next(std::begin(msg), 8), std::next(std::begin(msg), 16)});
 
-    return std::string{std::next(std::begin(msg), 8), std::end(msg)};
+    return std::string{std::next(std::begin(msg), 16), std::end(msg)};
   }
 
-  void write(const std::string& text, code_t code = code_t::ok) {
-    std::string str{code_t_s(code)};
+  void write(const std::string& text, code_t code = code_t::ok,
+             u_int64_t extra = 0ull) {
+    std::string str;
+    str += ludo::BitsConverter<code_t>::toString(code);
+    str += ludo::BitsConverter<u_int64_t>::toString(extra);
     str += text;
     this->socket.send(zmq::message_t(std::begin(str), std::end(str)),
                       zmq::send_flags::none);
   }
 
-  std::string writeread(const std::string& text, code_t code = code_t::ok) {
-    this->write(text, code);
+  std::string writeread(const std::string& text, code_t code = code_t::ok,
+                        u_int64_t extra = 0ull) {
+    this->write(text, code, extra);
     return this->read();
   }
 
-  std::string readwrite(const std::string& text, code_t code = code_t::ok) {
+  std::string readwrite(const std::string& text, code_t code = code_t::ok,
+                        u_int64_t extra = 0ull) {
     auto result = this->read();
-    this->write(text, code);
+    this->write(text, code, extra);
     return result;
   }
 };
