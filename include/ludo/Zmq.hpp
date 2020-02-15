@@ -2,40 +2,51 @@
 #include <string>
 #include <zmq.hpp>
 
-struct ludo {
-  class Zmq {
-    static int io_threads;
-    static zmq::context_t context;
+namespace ludo {
+class Zmq {
+  static int io_threads;
+  static zmq::context_t context;
 
-    zmq::socket_t socket;
+  zmq::socket_t socket;
 
-   public:
-    Zmq() {}
-    ~Zmq() {}
+ public:
+  Zmq() {}
+  ~Zmq() {}
 
-    void bind(std::string url, int type = ZMQ_REP) {
-      this->socket = zmq::socket_t{this->context, type};
-      this->socket.bind(url);
-    }
+  void bind(std::string url) {
+    this->socket = zmq::socket_t{this->context, ZMQ_REP};
+    this->socket.bind(url);
+  }
 
-    void connect(std::string url, int type = ZMQ_REQ) {
-      this->socket = zmq::socket_t{this->context, type};
-      this->socket.connect(url);
-    }
+  void connect(std::string url) {
+    this->socket = zmq::socket_t{this->context, ZMQ_REQ};
+    this->socket.connect(url);
+  }
 
-    std::string read(zmq::recv_flags waiting = zmq::recv_flags::none) {
-      zmq::message_t request;
-      zmq::detail::recv_result_t result = this->socket.recv(request, waiting);
+  void subscribe(std::string url, std::string filter = "") {
+    this->socket = zmq::socket_t{this->context, ZMQ_SUB};
+    this->socket.connect(url);
+    this->socket.setsockopt(ZMQ_SUBSCRIBE, filter.c_str(), filter.size());
+  }
 
-      return std::string{static_cast<char *>(request.data()), result.value()};
-    }
+  void publish(std::string url) {
+    this->socket = zmq::socket_t{this->context, ZMQ_PUB};
+    this->socket.bind(url);
+  }
 
-    void write(std::string text) {
-      this->socket.send(zmq::message_t(text.c_str(), text.size()),
-                        zmq::send_flags::none);
-    }
-  };
+  std::string read(zmq::recv_flags waiting = zmq::recv_flags::none) {
+    zmq::message_t request;
+    zmq::detail::recv_result_t result = this->socket.recv(request, waiting);
+
+    return std::string{static_cast<char *>(request.data()), result.value()};
+  }
+
+  void write(std::string text) {
+    this->socket.send(zmq::message_t(text.c_str(), text.size()),
+                      zmq::send_flags::none);
+  }
 };
+}  // namespace ludo
 
-int ludo::Zmq::io_threads = 2;
+int ludo::Zmq::io_threads = 1;
 zmq::context_t ludo::Zmq::context = zmq::context_t{Zmq::io_threads};

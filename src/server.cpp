@@ -7,14 +7,13 @@ using json = nlohmann::json;
 
 int main() {
   ludo::Zmq socket;
-  socket.bind("tcp://*:5555");
+  socket.publish("tcp://*:5555");
 
   json message;
   message["???"] = "nice";
 
 
   while (true) {
-    std::cout << socket.read() << '\n';
     socket.write(message.dump());
   }
   return 0;
